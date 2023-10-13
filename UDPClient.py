@@ -5,9 +5,9 @@ import time
 
 # Server
 UDP_IP_OTHER = ''
-UDP_PORT_OTHER = 9801
+UDP_PORT_OTHER = 9804
 UDP_IP_SELF = ''
-UDP_PORT_SELF = 9801
+UDP_PORT_SELF = 9804
 
 # Protocols
 MESSAGE = b"SendSize\n\n"
@@ -15,11 +15,15 @@ RESET_MESSAGE = b"SendSize\nReset\n\n"
 REQ_SIZE = 1448
 SIZE = 0
 LINES = 0
+WAIT_TIME = 0.1
 
 # Offset queue
 ack_queue = dict[int,int]()
 # File
 file_lines = dict[int,str]()
+
+
+f = open("demofile.txt",'w')
 
 # Message to bytes
 def msg_to_bytes(offset: int,byte: int) -> bytes:
@@ -71,58 +75,60 @@ def MD5_Hash() -> str:
         req_size += REQ_SIZE
     byte_stream_:str = hashlib.md5(byte_stream.encode()).hexdigest()
     print("Hash generated!")
+    print(byte_stream_)
     return byte_stream_
 
 # Submission protocol
 def submit(server:socket.socket) -> None:
     print("Submitting messages...")
     data_ = MD5_Hash()
-    msg = f"Submit:Mayank@Mayank\nMD5:{data_}\n\n"
+    msg = f"Submit: Mayank@Mayank\nMD5: {data_}\n\n"
     server.sendto(msg.encode(),(UDP_IP_OTHER, UDP_PORT_OTHER))
     print("Successful successful submitted the hash!")
 
 # Receiving messages in parallel
-def recv_msg(server:socket.socket) -> None:
-    print("Receiving messages...")
+def recv_msg(server:socket.socket,offset:int) -> bool:
     global ack_queue, file_lines
-    while len(file_lines) != LINES:
-        data = server.makefile("r", encoding="utf8", newline="\n")
-        _,offset_ = data.readline().split(':')
-        _,numbytes_ = data.readline().split(':')
-        _ = data.readline()
-        byte_to_string_stream :str = data.readline()
-
-        # print(offset_,numbytes_)
-        if int(offset_) not in file_lines:
-            # print(int(offset_))
-            file_lines[int(offset_)] = byte_to_string_stream
-            ack_queue.pop(int(offset_))
-    print("Successful received all the messages!")
+    try:
+        data,addr = server.recvfrom(2000)
+        data = data.decode().split('\n',3)
+        _,offset_ = data[0].split(": ")
+        byte_to_string_stream :str = data[3]
+        if offset == int(offset_):
+            f.write(f"\n{offset} :\n")
+            f.write(byte_to_string_stream)
+            file_lines[int(offset)] = byte_to_string_stream
+            return True
+        return False
+    except:
+        print(f"{offset} error.")
+        return False
 
 # Requesting messages in parallel
 def req_msg(server:socket.socket) -> None:
     print("Requesting messages...")
     global ack_queue
-    while len(ack_queue):
-        for offset,size in ack_queue.items():
-            msg: bytes = msg_to_bytes(offset,size)
-            # print(msg.decode())
-            server.sendto(msg,(UDP_IP_OTHER, UDP_PORT_OTHER))
-            time.sleep(0.5)
-    print("Successful requested all the messages!")
+    for offset,size in ack_queue.items():
+        print(f"Asking for {offset}.")
+        time.sleep(0.1)
+        msg: bytes = msg_to_bytes(offset,size)
+        while True:
+            try:
+                server.sendto(msg,(UDP_IP_OTHER, UDP_PORT_OTHER))
+                if not recv_msg(server,offset):
+                    print("Oops! Message got dropped?")
+                    continue
+                print("Successful requested the messages!")
+                break
+            except: pass
 
 # Main block
 with socket.socket(family=socket.AF_INET,type=socket.SOCK_DGRAM) as server:
-    server.settimeout(3)
-    # server.bind((UDP_IP_SELF,UDP_PORT_SELF))        # Binding a receiving port
+    server.settimeout(WAIT_TIME)
     recv_size(server)                               # Get size
     initialize_queue(SIZE,REQ_SIZE)                 # Initialize DS
-    # for key,val in ack_queue.items():
-    #     print(key,val)
-    start_new_thread(recv_msg,(server,))             # Start receiving messages
-    start_new_thread(req_msg,(server,))              # Start requesting messages
-    while len(file_lines) != LINES: pass            # Wait till whole file is reassembled
-    submit()                                        # Perform submission
+    req_msg(server)
+    submit(server)                                        # Perform submission
     reply = server.makefile("r", encoding="utf8", newline="\n")
-    while reply:
-        print(reply.readline())
+    for replies in reply:
+        print(replies)
