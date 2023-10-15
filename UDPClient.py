@@ -136,6 +136,6 @@ with socket.socket(family=socket.AF_INET,type=socket.SOCK_DGRAM) as server:
     reply = server.makefile("r", encoding="utf8", newline="\n")
     try:
         for replies in reply:
-            print(replies)
+            print(replies,end='')
     except:
         pass
