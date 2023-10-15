@@ -15,7 +15,7 @@ RESET_MESSAGE = b"SendSize\nReset\n\n"
 REQ_SIZE = 1448
 SIZE = 0
 LINES = 0
-WAIT_TIME = 0.1
+WAIT_TIME = 0.006
 
 # Offset queue
 ack_queue = dict[int,int]()
@@ -23,7 +23,7 @@ ack_queue = dict[int,int]()
 file_lines = dict[int,str]()
 
 
-f = open("demofile.txt",'w')
+# f = open("demofile.txt",'w')
 
 # Message to bytes
 def msg_to_bytes(offset: int,byte: int) -> bytes:
@@ -47,7 +47,8 @@ def recv_size(server:socket.socket,reset : bool = False) -> None:
             print(f"Received a the size of file : {SIZE}")
             break
         except:
-            print("Size request not sent or packet was dropped.")
+            # print("Size re quest not sent or packet was dropped.")
+            pass
     print("Successful received the size of file.")
 
 # Queue of block not received
@@ -75,7 +76,7 @@ def MD5_Hash() -> str:
         req_size += REQ_SIZE
     byte_stream_:str = hashlib.md5(byte_stream.encode()).hexdigest()
     print("Hash generated!")
-    print(byte_stream_)
+    print("Hash ->",byte_stream_)
     return byte_stream_
 
 # Submission protocol
@@ -95,13 +96,13 @@ def recv_msg(server:socket.socket,offset:int) -> bool:
         _,offset_ = data[0].split(": ")
         byte_to_string_stream :str = data[3]
         if offset == int(offset_):
-            f.write(f"\n{offset} :\n")
-            f.write(byte_to_string_stream)
+            # f.write(f"\n{offset} :\n")
+            # f.write(byte_to_string_stream)
             file_lines[int(offset)] = byte_to_string_stream
             return True
         return False
     except:
-        print(f"{offset} error.")
+        # print(f"{offset} error.")
         return False
 
 # Requesting messages in parallel
@@ -109,26 +110,32 @@ def req_msg(server:socket.socket) -> None:
     print("Requesting messages...")
     global ack_queue
     for offset,size in ack_queue.items():
-        print(f"Asking for {offset}.")
-        time.sleep(0.1)
+        # print(f"Asking for {offset}.")
+        time.sleep(WAIT_TIME)
         msg: bytes = msg_to_bytes(offset,size)
         while True:
             try:
                 server.sendto(msg,(UDP_IP_OTHER, UDP_PORT_OTHER))
                 if not recv_msg(server,offset):
-                    print("Oops! Message got dropped?")
+                    # print("Oops! Message got dropped?")
                     continue
-                print("Successful requested the messages!")
+                # print("Successful requested the messages!")
                 break
             except: pass
+    print("All message requested!")
 
 # Main block
 with socket.socket(family=socket.AF_INET,type=socket.SOCK_DGRAM) as server:
+    # t = time.time()
     server.settimeout(WAIT_TIME)
     recv_size(server)                               # Get size
     initialize_queue(SIZE,REQ_SIZE)                 # Initialize DS
     req_msg(server)
     submit(server)                                        # Perform submission
+    # print(time.time()-t)
     reply = server.makefile("r", encoding="utf8", newline="\n")
-    for replies in reply:
-        print(replies)
+    try:
+        for replies in reply:
+            print(replies)
+    except:
+        pass
