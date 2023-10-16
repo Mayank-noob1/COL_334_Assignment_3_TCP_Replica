@@ -15,8 +15,8 @@ RESET_MESSAGE = b"SendSize\nReset\n\n"
 REQ_SIZE = 1448
 SIZE = 0
 LINES = 0
-WAIT_TIME = 0.001
-MIN_WAIT_TIME = 0.001
+WAIT_TIME = 0.1
+MIN_WAIT_TIME = 0.1
 
 # Offset queue
 ack_queue = dict[int,int]()
@@ -121,11 +121,11 @@ def req_msg(server:socket.socket) -> None:
                 server.sendto(msg,(UDP_IP_OTHER, UDP_PORT_OTHER))
                 if not recv_msg(server,offset):
                     # print("Oops! Message got dropped?")
-                    WAIT_TIME *= 1.5
+                    WAIT_TIME *= 2
                     server.settimeout(max(WAIT_TIME,MIN_WAIT_TIME))
                     continue
                 # print("Successful requested the messages!")
-                WAIT_TIME *= 0.75
+                WAIT_TIME *= 0.8
                 server.settimeout(max(WAIT_TIME,MIN_WAIT_TIME))
                 break
             except: pass
