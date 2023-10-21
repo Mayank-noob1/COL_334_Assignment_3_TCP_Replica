@@ -34,7 +34,7 @@ def msg_to_bytes(offset: int,byte: int) -> bytes:
 
 # Size receiving protocol
 def recv_size(server:socket.socket,reset : bool = False) -> None:
-    print("Receiving size.")
+    # print("Receiving size.")
     global SIZE,RTT
     while True:
         t = time.time()
@@ -47,14 +47,14 @@ def recv_size(server:socket.socket,reset : bool = False) -> None:
             # raw,addr = server.recvfrom(REQ_SIZE)
             raw = data.readline()
             SIZE = int(raw.split(':')[1])
-            print(f"Received a the size of file : {SIZE}")
-            RTT = 1.05*(time.time()-t)
+            # print(f"Received a the size of file : {SIZE}")
+            RTT += (time.time()-t)
             # print(RTT)
             break
         except:
             # print("Size re quest not sent or packet was dropped.")
             pass
-    print("Successful received the size of file.")
+    # print("Successful received the size of file.")
 
 # Queue of block not received
 def initialize_queue(size:int,packet_size:int) -> None:
@@ -89,8 +89,33 @@ def submit(server:socket.socket) -> None:
     print("Submitting messages...")
     data_ = MD5_Hash()
     msg = f"Submit: Mayank@Mayank\nMD5: {data_}\n\n"
-    server.sendto(msg.encode(),(UDP_IP_OTHER, UDP_PORT_OTHER))
-    print("Successful successful submitted the hash!")
+    while True:
+        try:
+            server.sendto(msg.encode(),(UDP_IP_OTHER, UDP_PORT_OTHER))
+            time.sleep(3*RTT)
+            data,_=server.recvfrom(10000)
+            datas = data.decode().split('\n')
+            # print(datas)
+            for line in datas:
+                print(line)
+                if line.startswith("Penalty"):
+                    return
+        except:
+            pass
+    print("Successful submitted.")
+
+def flush(server:socket.socket) -> None:
+    print("Flushing previous messages...")
+    time.sleep(5*RTT)
+    i = 0
+    while True:
+        try:
+            data,_=server.recvfrom(2000)
+            # print(data.decode())
+        except:
+            i += 1
+            if i == 4:
+                break
 
 # Think about multiple requests coming together. 
 # Receiving messages in parallel
@@ -138,10 +163,9 @@ def req_msg(server:socket.socket) -> None:
         i = 0
         for offset,size in ack_queue.items():
             if (i == n): break
-            msg = f"Offset: {offset}\nNumBytes: {size}\n\n"
-            server.sendto(msg.encode(),(UDP_IP_OTHER, UDP_PORT_OTHER))
+            server.sendto(msg_to_bytes(offset,size),(UDP_IP_OTHER, UDP_PORT_OTHER))
             i += 1
-        time.sleep(RTT*((n+1)//2))
+        time.sleep(RTT*(3))
         received =recv_msg(server,n)
         if n <= 5:
             if 10*received < n*7:
@@ -164,22 +188,12 @@ t = time.time()
 # Main block
 with socket.socket(family=socket.AF_INET,type=socket.SOCK_DGRAM) as server:
     server.settimeout(WAIT_TIME)
-    # print(time.time()-t)
-    recv_size(server,True)                               # Get size
+    recv_size(server,True)
+    for i in range(9):
+        recv_size(server,False)                               # Get size
+    RTT /= 10
     server.settimeout(RTT)
-    # print(time.time()-t)
     initialize_queue(SIZE,REQ_SIZE)                 # Initialize DS
-    # print(time.time()-t)
     req_msg(server=server)
-    # print(time.time()-t)
+    flush(server)
     submit(server)                                        # Perform submission
-    # print(time.time()-t)
-    time.sleep(5*RTT)
-    reply = server.makefile("r", encoding="utf8", newline="\n")
-    try:
-        for replies in reply:
-            print(replies,end='')
-            if replies.startswith("Penalty"):
-                break
-    except:
-        pass
