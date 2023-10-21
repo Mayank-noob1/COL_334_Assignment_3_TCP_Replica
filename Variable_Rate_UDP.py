@@ -99,7 +99,8 @@ def recv_msg(server:socket.socket,n:int) -> int:
     global N,LINES,PACKETS,file_lines,RTT
     i = 0
     received = 0
-    while i < n:
+    while i <= n:
+        i += 1
         try:
             data,_ = server.recvfrom(2000)
             data = data.decode().split('\n',3)
@@ -119,11 +120,9 @@ def recv_msg(server:socket.socket,n:int) -> int:
 
             # Deletion from the place we are requesting the offset
             ack_queue.pop(int(offset_))
-            LINES -= 1
-            i += 1
             received += 1
         except:
-            i += 1
+            pass
     # print("Messages received.")
     return received
 
@@ -170,7 +169,7 @@ with socket.socket(family=socket.AF_INET,type=socket.SOCK_DGRAM) as server:
     req_msg(server=server)
 
     submit(server)                                        # Perform submission
-    time.sleep(2*RTT)
+    time.sleep(3*RTT)
     reply = server.makefile("r", encoding="utf8", newline="\n")
     try:
         for replies in reply:
