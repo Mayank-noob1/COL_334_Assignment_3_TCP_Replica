@@ -48,7 +48,7 @@ def recv_size(server:socket.socket,reset : bool = False) -> None:
             raw = data.readline()
             SIZE = int(raw.split(':')[1])
             print(f"Received a the size of file : {SIZE}")
-            RTT = 1.08*(time.time()-t)
+            RTT = 1.05*(time.time()-t)
             # print(RTT)
             break
         except:
@@ -141,7 +141,7 @@ def req_msg(server:socket.socket) -> None:
             msg = f"Offset: {offset}\nNumBytes: {size}\n\n"
             server.sendto(msg.encode(),(UDP_IP_OTHER, UDP_PORT_OTHER))
             i += 1
-        time.sleep(2*RTT)
+        time.sleep(RTT*((n+1)//2))
         received =recv_msg(server,n)
         if n <= 5:
             if 10*received < n*7:
