@@ -13,8 +13,8 @@ RESET_MESSAGE = b"SendSize\nReset\n\n"
 REQ_SIZE = 1448
 SIZE = 0
 LINES = 0
-WAIT_TIME = 0.05
-RTT = 0.1
+WAIT_TIME = 0.1
+RTT = 0.01
 N = 1
 PACKETS = 0
 
@@ -48,8 +48,8 @@ def recv_size(server:socket.socket,reset : bool = False) -> None:
             raw = data.readline()
             SIZE = int(raw.split(':')[1])
             print(f"Received a the size of file : {SIZE}")
-            RTT = time.time()-t
-            RTT *= 1.1
+            RTT = 1.08*(time.time()-t)
+            # print(RTT)
             break
         except:
             # print("Size re quest not sent or packet was dropped.")
@@ -114,9 +114,9 @@ def recv_msg(server:socket.socket,n:int) -> int:
                 print("Squished ------------------------")
                 print("Squished ------------------------")
                 N = (N+1)//2
-                byte_to_string_stream = byte_to_string_stream[1:]
-            
-            file_lines[int(offset_)] = byte_to_string_stream
+                file_lines[int(offset_)] = byte_to_string_stream[1:]
+            else:
+                file_lines[int(offset_)] = byte_to_string_stream
 
             # Deletion from the place we are requesting the offset
             ack_queue.pop(int(offset_))
@@ -138,11 +138,11 @@ def req_msg(server:socket.socket) -> None:
         i = 0
         for offset,size in ack_queue.items():
             if (i == n): break
-            msg: bytes = msg_to_bytes(offset,size)
-            server.sendto(msg,(UDP_IP_OTHER, UDP_PORT_OTHER))
+            msg = f"Offset: {offset}\nNumBytes: {size}\n\n"
+            server.sendto(msg.encode(),(UDP_IP_OTHER, UDP_PORT_OTHER))
             i += 1
-        time.sleep(3*RTT)
-        received =recv_msg(server=server,n=n)
+        time.sleep(2*RTT)
+        received =recv_msg(server,n)
         if n <= 5:
             if 10*received < n*7:
                 N = (N+1)//2
@@ -160,16 +160,21 @@ def req_msg(server:socket.socket) -> None:
                 N += 1
     print("All message requested!")
 
+t = time.time()
 # Main block
 with socket.socket(family=socket.AF_INET,type=socket.SOCK_DGRAM) as server:
     server.settimeout(WAIT_TIME)
+    # print(time.time()-t)
     recv_size(server,True)                               # Get size
     server.settimeout(RTT)
+    # print(time.time()-t)
     initialize_queue(SIZE,REQ_SIZE)                 # Initialize DS
+    # print(time.time()-t)
     req_msg(server=server)
-
+    # print(time.time()-t)
     submit(server)                                        # Perform submission
-    time.sleep(3*RTT)
+    # print(time.time()-t)
+    time.sleep(5*RTT)
     reply = server.makefile("r", encoding="utf8", newline="\n")
     try:
         for replies in reply:
