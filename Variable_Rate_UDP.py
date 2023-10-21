@@ -1,11 +1,9 @@
-import socket
-import hashlib
+import socket,hashlib,random,threading,time
 from _thread import*
-import time
 
 # Server
-UDP_IP_OTHER = ''
-UDP_PORT_OTHER = 9810
+UDP_IP_OTHER = 'vayu.iitd.ac.in'
+UDP_PORT_OTHER = 9802
 UDP_IP_SELF = ''
 UDP_PORT_SELF = 9810
 
@@ -15,14 +13,17 @@ RESET_MESSAGE = b"SendSize\nReset\n\n"
 REQ_SIZE = 1448
 SIZE = 0
 LINES = 0
-WAIT_TIME = 0.1
-MIN_WAIT_TIME = 0.1
+WAIT_TIME = 0.05
+RTT = 0.1
+N = 1
+PACKETS = 0
 
 # Offset queue
 ack_queue = dict[int,int]()
 # File
 file_lines = dict[int,str]()
-
+ack_lock = threading.Lock()
+pack_lock = threading.Lock()
 
 # f = open("demofile.txt",'w')
 
@@ -34,8 +35,9 @@ def msg_to_bytes(offset: int,byte: int) -> bytes:
 # Size receiving protocol
 def recv_size(server:socket.socket,reset : bool = False) -> None:
     print("Receiving size.")
-    global SIZE
+    global SIZE,RTT
     while True:
+        t = time.time()
         try:
             if reset:
                 server.sendto(RESET_MESSAGE,(UDP_IP_OTHER, UDP_PORT_OTHER))
@@ -46,6 +48,8 @@ def recv_size(server:socket.socket,reset : bool = False) -> None:
             raw = data.readline()
             SIZE = int(raw.split(':')[1])
             print(f"Received a the size of file : {SIZE}")
+            RTT = time.time()-t
+            RTT *= 1.1
             break
         except:
             # print("Size re quest not sent or packet was dropped.")
@@ -88,59 +92,90 @@ def submit(server:socket.socket) -> None:
     server.sendto(msg.encode(),(UDP_IP_OTHER, UDP_PORT_OTHER))
     print("Successful successful submitted the hash!")
 
+# Think about multiple requests coming together. 
 # Receiving messages in parallel
-def recv_msg(server:socket.socket,offset:int) -> bool:
-    global ack_queue, file_lines
-    try:
-        data,addr = server.recvfrom(2000)
-        data = data.decode().split('\n',3)
-        _,offset_ = data[0].split(": ")
-        byte_to_string_stream =data[3]
-        if data[2] == "Squished":
-            byte_to_string_stream = byte_to_string_stream[1:]
+def recv_msg(server:socket.socket,n:int) -> int:
+    # print("Receiving messages...")
+    global N,LINES,PACKETS,file_lines,RTT
+    i = 0
+    received = 0
+    while i < n:
+        try:
+            data,_ = server.recvfrom(2000)
+            data = data.decode().split('\n',3)
+            _,offset_ = data[0].split(": ")
+            byte_to_string_stream = data[3]
 
-        if offset == int(offset_):
-            file_lines[int(offset)] = byte_to_string_stream
-            return True
-        return False
-    except:
-        # print(f"{offset} error.")
-        return False
+            if data[2] == "Squished":
+                print("Squished ------------------------")
+                print("Squished ------------------------")
+                print("Squished ------------------------")
+                print("Squished ------------------------")
+                print("Squished ------------------------")
+                N = (N+1)//2
+                byte_to_string_stream = byte_to_string_stream[1:]
+            
+            file_lines[int(offset_)] = byte_to_string_stream
+
+            # Deletion from the place we are requesting the offset
+            ack_queue.pop(int(offset_))
+            LINES -= 1
+            i += 1
+            received += 1
+        except:
+            i += 1
+    # print("Messages received.")
+    return received
 
 # Requesting messages in parallel
 def req_msg(server:socket.socket) -> None:
     print("Requesting messages...")
-    global ack_queue,WAIT_TIME,MIN_WAIT_TIME
-    for offset,size in ack_queue.items():
-        # print(f"Asking for {offset}.")
-        # print(offset,WAIT_TIME)
-        # time.sleep(WAIT_TIME)
-        msg: bytes = msg_to_bytes(offset,size)
-        while True:
-            try:
-                server.sendto(msg,(UDP_IP_OTHER, UDP_PORT_OTHER))
-                if not recv_msg(server,offset):
-                    # print("Oops! Message got dropped?")
-                    WAIT_TIME *= 2
-                    server.settimeout(max(WAIT_TIME,MIN_WAIT_TIME))
-                    continue
-                # print("Successful requested the messages!")
-                WAIT_TIME *= 0.8
-                server.settimeout(max(WAIT_TIME,MIN_WAIT_TIME))
-                break
-            except: pass
+    global N,PACKETS
+    while True:
+        if len(ack_queue) == 0:
+            break
+        # msg_to_be_requested = dict[int,int]()
+        n = min(N,len(ack_queue))
+        i = 0
+        for offset,size in ack_queue.items():
+            if (i == n): break
+            msg: bytes = msg_to_bytes(offset,size)
+            server.sendto(msg,(UDP_IP_OTHER, UDP_PORT_OTHER))
+            i += 1
+        time.sleep(3*RTT)
+        received =recv_msg(server=server,n=n)
+        if n <= 5:
+            if 10*received < n*7:
+                N = (N+1)//2
+            else:
+                N += 1
+        elif n <= 10:
+            if 10*received < n*8:
+                N = (N+1)//2
+            else:
+                N += 1
+        else:
+            if 10*received < n*9:
+                N = (N+1)//2
+            else:
+                N += 1
     print("All message requested!")
 
 # Main block
 with socket.socket(family=socket.AF_INET,type=socket.SOCK_DGRAM) as server:
     server.settimeout(WAIT_TIME)
-    recv_size(server)                               # Get size
+    recv_size(server,True)                               # Get size
+    server.settimeout(RTT)
     initialize_queue(SIZE,REQ_SIZE)                 # Initialize DS
-    req_msg(server)
+    req_msg(server=server)
+
     submit(server)                                        # Perform submission
+    time.sleep(2*RTT)
     reply = server.makefile("r", encoding="utf8", newline="\n")
     try:
         for replies in reply:
             print(replies,end='')
+            if replies.startswith("Penalty"):
+                break
     except:
         pass
