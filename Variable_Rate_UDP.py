@@ -13,7 +13,7 @@ RESET_MESSAGE = b"SendSize\nReset\n\n"
 REQ_SIZE = 1448
 SIZE = 0
 LINES = 0
-WAIT_TIME = 0.1
+WAIT_TIME = 0.2
 RTT = 0.01
 N = 1
 PACKETS = 0
@@ -129,7 +129,8 @@ def recv_msg(server:socket.socket,n:int) -> int:
             data = data.decode().split('\n',3)
             _,offset_ = data[0].split(": ")
             byte_to_string_stream = data[3]
-
+            if (len(data) != 4):
+                continue
             if data[2] == "Squished":
                 print("Squished ------------------------")
                 print("Squished ------------------------")
@@ -166,19 +167,20 @@ def req_msg(server:socket.socket) -> None:
             i += 1
         time.sleep(RTT*(3))
         received =recv_msg(server,n)
+        time.sleep(RTT*(2-1/n))
         if n <= 5:
             if 10*received < n*7:
-                N = (N+1)//2
+                N -= (N>0)
             else:
                 N += 1
         elif n <= 10:
             if 10*received < n*8:
-                N = (N+1)//2
+                N -= (N>0)
             else:
                 N += 1
         else:
             if 10*received < n*9:
-                N = (N+1)//2
+                N -= (N>0)
             else:
                 N += 1
     print("All message requested!")
