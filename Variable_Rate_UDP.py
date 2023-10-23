@@ -22,8 +22,6 @@ PACKETS = 0
 ack_queue = dict[int,int]()
 # File
 file_lines = dict[int,str]()
-ack_lock = threading.Lock()
-pack_lock = threading.Lock()
 
 # f = open("demofile.txt",'w')
 
@@ -144,7 +142,8 @@ def recv_msg(server:socket.socket,n:int) -> int:
                 file_lines[int(offset_)] = byte_to_string_stream
 
             # Deletion from the place we are requesting the offset
-            ack_queue.pop(int(offset_))
+            if int(offset_) in ack_queue:
+                ack_queue.pop(int(offset_))
             received += 1
         except:
             pass
