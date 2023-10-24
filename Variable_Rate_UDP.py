@@ -1,9 +1,11 @@
 import socket,hashlib,random,threading,time
 from _thread import*
 
+import numpy as np
+
 # Server
 UDP_IP_OTHER = 'vayu.iitd.ac.in'
-UDP_PORT_OTHER = 9802
+UDP_PORT_OTHER = 9801
 UDP_IP_SELF = ''
 UDP_PORT_SELF = 9810
 
@@ -13,11 +15,12 @@ RESET_MESSAGE = b"SendSize\nReset\n\n"
 REQ_SIZE = 1448
 SIZE = 0
 LINES = 0
-WAIT_TIME = 0.2
+WAIT_TIME = 0.1
+RTT_array = []
 RTT = 0.01
 N = 1
 PACKETS = 0
-
+squished = 0
 # Offset queue
 ack_queue = dict[int,int]()
 # File
@@ -46,7 +49,7 @@ def recv_size(server:socket.socket,reset : bool = False) -> None:
             raw = data.readline()
             SIZE = int(raw.split(':')[1])
             # print(f"Received a the size of file : {SIZE}")
-            RTT += (time.time()-t)
+            RTT_array.append(time.time()-t)
             # print(RTT)
             break
         except:
@@ -115,11 +118,11 @@ def flush(server:socket.socket) -> None:
             if i == 4:
                 break
 
-# Think about multiple requests coming together. 
+# Think about multiple requests coming together.
 # Receiving messages in parallel
 def recv_msg(server:socket.socket,n:int) -> int:
     # print("Receiving messages...")
-    global N,LINES,PACKETS,file_lines,RTT
+    global N,LINES,PACKETS,file_lines,RTT, squished
     i = 0
     received = 0
     while i <= n:
@@ -132,11 +135,14 @@ def recv_msg(server:socket.socket,n:int) -> int:
             if (len(data) != 4):
                 continue
             if data[2] == "Squished":
+                squished += 1
                 print("Squished ------------------------")
                 print("Squished ------------------------")
                 print("Squished ------------------------")
                 print("Squished ------------------------")
                 print("Squished ------------------------")
+                RTT *= (1.01)
+                server.settimeout(RTT)
                 N = (N+1)//2
                 file_lines[int(offset_)] = byte_to_string_stream[1:]
             else:
@@ -170,31 +176,48 @@ def req_msg(server:socket.socket) -> None:
         time.sleep(RTT*(2-1/n))
         if n <= 5:
             if 10*received < n*7:
-                N -= (N>0)
+                # N -= (N>1)
+                N = (N+1)//2
             else:
                 N += 1
         elif n <= 10:
             if 10*received < n*8:
-                N -= (N>0)
+                # N -= (N>1)
+                N = (N + 1) // 2
             else:
                 N += 1
         else:
             if 10*received < n*9:
-                N -= (N>0)
+                # N -= (N>1)
+                N = (N + 1) // 2
             else:
                 N += 1
     print("All message requested!")
 
 t = time.time()
 # Main block
-with socket.socket(family=socket.AF_INET,type=socket.SOCK_DGRAM) as server:
-    server.settimeout(WAIT_TIME)
-    recv_size(server,True)
-    for i in range(9):
-        recv_size(server,False)                               # Get size
-    RTT /= 10
-    server.settimeout(RTT)
-    initialize_queue(SIZE,REQ_SIZE)                 # Initialize DS
-    req_msg(server=server)
-    flush(server)
-    submit(server)                                        # Perform submission
+for zz in range(1):
+    print("zz: ", zz)
+    with socket.socket(family=socket.AF_INET,type=socket.SOCK_DGRAM) as server:
+        server.settimeout(WAIT_TIME)
+        t = time.time()
+        recv_size(server,True)
+        print(SIZE)
+        for i in range(199):
+            recv_size(server,False)                               # Get size
+        print(time.time()-t)
+        # RTT /= 100
+        # print(RTT)
+        RTT = np.median(RTT_array)
+        RTT *= 1.3
+        # RTT *= 1.5
+        # RTT = max(RTT, 0.0055)
+        # RTT = 0.003
+        print(RTT)
+        server.settimeout(RTT)
+        initialize_queue(SIZE,REQ_SIZE)                 # Initialize DS
+        req_msg(server=server)
+        flush(server)
+        submit(server)                                        # Perform submission
+print(RTT)
+print("Squished count: ", squished)
