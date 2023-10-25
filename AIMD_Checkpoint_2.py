@@ -13,17 +13,14 @@ REQ_SIZE = 1448
 SIZE = 0
 LINES = 0
 WAIT_TIME = 0.1
-RTT = 0.01
+RTT = 0.005
 RTT_array = []
 N = 5
-PACKETS = 0
 squished = 0
 # Offset queue
 ack_queue = dict[int,int]()
 # File
 file_lines = dict[int,str]()
-
-# f = open("demofile.txt",'w')
 
 # Message to bytes
 def msg_to_bytes(offset: int,byte: int) -> bytes:
@@ -57,7 +54,10 @@ def recv_size(server:socket.socket,reset : bool = False) -> None:
 # Queue of block not received
 def initialize_queue(size:int,packet_size:int) -> None:
     print("Initializing queue.")
-    global ack_queue,LINES
+    global ack_queue,LINES,squished
+    LINES, squished = 0,0
+    ack_queue.clear()
+    file_lines.clear()
     cnt = 0
     increment:int = 0
     while (increment < size):
@@ -110,6 +110,7 @@ def submit(server:socket.socket) -> None:
         except:
             pass
 
+# Flushes the buffer
 def flush(server:socket.socket) -> None:
     print("Flushing previous messages...")
     time.sleep(5*RTT)
@@ -139,7 +140,7 @@ def recv_msg(server:socket.socket,n:int) -> int:
                 continue
             if data[2] == "Squished":
                 squished += 1
-                print("Squished ;(")
+                print("Squished :(")
                 RTT *= (1.01)
                 server.settimeout(RTT)
                 N = (N+1)//2
@@ -158,11 +159,10 @@ def recv_msg(server:socket.socket,n:int) -> int:
 # Requesting messages
 def req_msg(server:socket.socket) -> None:
     print("Requesting messages...")
-    global N,PACKETS
+    global N
     while True:
         if len(ack_queue) == 0:
             break
-        # msg_to_be_requested = dict[int,int]()
         n = min(N,len(ack_queue))
         i = 0
         for offset,size in ack_queue.items():
@@ -177,20 +177,21 @@ def req_msg(server:socket.socket) -> None:
             N += 1
     print("All message requested!")
 
+# Main flow
 for _ in range(1):
     with socket.socket(family=socket.AF_INET,type=socket.SOCK_DGRAM) as server:
         server.settimeout(WAIT_TIME)
         t = time.time()
         recv_size(server,True)
         for i in range(99):
-            recv_size(server,False)                               # Get size
+            recv_size(server,False)
         RTT_array.sort()
         mid = len(RTT_array)//2
-        RTT = (RTT_array[mid]+RTT_array[-mid])/2
-        RTT = max(RTT, 0.005)
+        RTT = max((RTT_array[mid]+RTT_array[-mid])/2, RTT)       # Median of 100 samples of RTT
         server.settimeout(RTT)
         initialize_queue(SIZE,REQ_SIZE)                 # Initialize DS
-        req_msg(server=server)
-        flush(server)
+        req_msg(server=server)                          # Request messages
+        flush(server)                                   # Flushing buffer
         submit(server)                                  # Perform submission
-print("Squishes Count:", squished//100 + (squished%100 > 1))
+        print("Squishes:", squished//100 + (squished%100 > 0))
+        RTT_array.clear()
