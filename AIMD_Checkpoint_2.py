@@ -1,5 +1,4 @@
-import socket,hashlib,random,threading,time
-from _thread import*
+import socket,hashlib,time
 
 # Server
 UDP_IP_OTHER = '10.17.7.134'
@@ -124,8 +123,7 @@ def flush(server:socket.socket) -> None:
                 break
     print("Previous messages flushed!")
 
-# Think about multiple requests coming together.
-# Receiving messages in parallel
+# Receiving messages
 def recv_msg(server:socket.socket,n:int) -> int:
     global N,LINES,PACKETS,file_lines,RTT, squished
     i = 0
@@ -157,7 +155,7 @@ def recv_msg(server:socket.socket,n:int) -> int:
             pass
     return received
 
-# Requesting messages in parallel
+# Requesting messages
 def req_msg(server:socket.socket) -> None:
     print("Requesting messages...")
     global N,PACKETS
@@ -195,4 +193,4 @@ for _ in range(1):
         req_msg(server=server)
         flush(server)
         submit(server)                                  # Perform submission
-print("Squishes Count: ", squished)
+print("Squishes Count:", squished//100 + (squished%100 > 1))
