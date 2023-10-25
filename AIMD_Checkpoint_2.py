@@ -1,10 +1,8 @@
 import socket,hashlib,random,threading,time
 from _thread import*
 
-import numpy as np
-
 # Server
-UDP_IP_OTHER = 'vayu.iitd.ac.in'
+UDP_IP_OTHER = '10.17.7.134'
 UDP_PORT_OTHER = 9801
 UDP_IP_SELF = ''
 UDP_PORT_SELF = 9810
@@ -16,9 +14,9 @@ REQ_SIZE = 1448
 SIZE = 0
 LINES = 0
 WAIT_TIME = 0.1
-RTT_array = []
 RTT = 0.01
-N = 1
+RTT_array = []
+N = 5
 PACKETS = 0
 squished = 0
 # Offset queue
@@ -90,20 +88,28 @@ def submit(server:socket.socket) -> None:
     print("Submitting messages...")
     data_ = MD5_Hash()
     msg = f"Submit: Mayank@Mayank\nMD5: {data_}\n\n"
+    last = ""
+    last_last = ""
     while True:
         try:
             server.sendto(msg.encode(),(UDP_IP_OTHER, UDP_PORT_OTHER))
             time.sleep(3*RTT)
             data,_=server.recvfrom(10000)
             datas = data.decode().split('\n')
-            # print(datas)
             for line in datas:
-                print(line)
                 if line.startswith("Penalty"):
+                    if ("Result: true"  ==  last_last[-12:]):
+                        print("Result: true")
+                    else:
+                        print("Result: false")
+                    print(last)
+                    print(line)
+                    print("Successful submitted.")
                     return
+                last_last = last
+                last = line
         except:
             pass
-    print("Successful submitted.")
 
 def flush(server:socket.socket) -> None:
     print("Flushing previous messages...")
@@ -112,16 +118,15 @@ def flush(server:socket.socket) -> None:
     while True:
         try:
             data,_=server.recvfrom(2000)
-            # print(data.decode())
         except:
             i += 1
             if i == 4:
                 break
+    print("Previous messages flushed!")
 
 # Think about multiple requests coming together.
 # Receiving messages in parallel
 def recv_msg(server:socket.socket,n:int) -> int:
-    # print("Receiving messages...")
     global N,LINES,PACKETS,file_lines,RTT, squished
     i = 0
     received = 0
@@ -136,11 +141,7 @@ def recv_msg(server:socket.socket,n:int) -> int:
                 continue
             if data[2] == "Squished":
                 squished += 1
-                print("Squished ------------------------")
-                print("Squished ------------------------")
-                print("Squished ------------------------")
-                print("Squished ------------------------")
-                print("Squished ------------------------")
+                print("Squished ;(")
                 RTT *= (1.01)
                 server.settimeout(RTT)
                 N = (N+1)//2
@@ -154,7 +155,6 @@ def recv_msg(server:socket.socket,n:int) -> int:
             received += 1
         except:
             pass
-    # print("Messages received.")
     return received
 
 # Requesting messages in parallel
@@ -173,51 +173,26 @@ def req_msg(server:socket.socket) -> None:
             i += 1
         time.sleep(RTT*(3))
         received =recv_msg(server,n)
-        time.sleep(RTT*(2-1/n))
-        if n <= 5:
-            if 10*received < n*7:
-                # N -= (N>1)
-                N = (N+1)//2
-            else:
-                N += 1
-        elif n <= 10:
-            if 10*received < n*8:
-                # N -= (N>1)
-                N = (N + 1) // 2
-            else:
-                N += 1
+        if 10*received < n*9:
+            N = (N+1)//2
         else:
-            if 10*received < n*9:
-                # N -= (N>1)
-                N = (N + 1) // 2
-            else:
-                N += 1
+            N += 1
     print("All message requested!")
 
-t = time.time()
-# Main block
-for zz in range(1):
-    print("zz: ", zz)
+for _ in range(1):
     with socket.socket(family=socket.AF_INET,type=socket.SOCK_DGRAM) as server:
         server.settimeout(WAIT_TIME)
         t = time.time()
         recv_size(server,True)
-        print(SIZE)
-        for i in range(199):
+        for i in range(99):
             recv_size(server,False)                               # Get size
-        print(time.time()-t)
-        # RTT /= 100
-        # print(RTT)
-        RTT = np.median(RTT_array)
-        RTT *= 1.3
-        # RTT *= 1.5
-        # RTT = max(RTT, 0.0055)
-        # RTT = 0.003
-        print(RTT)
+        RTT_array.sort()
+        mid = len(RTT_array)//2
+        RTT = (RTT_array[mid]+RTT_array[-mid])/2
+        RTT = max(RTT, 0.005)
         server.settimeout(RTT)
         initialize_queue(SIZE,REQ_SIZE)                 # Initialize DS
         req_msg(server=server)
         flush(server)
-        submit(server)                                        # Perform submission
-print(RTT)
-print("Squished count: ", squished)
+        submit(server)                                  # Perform submission
+print("Squishes Count: ", squished)
