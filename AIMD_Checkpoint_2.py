@@ -158,7 +158,7 @@ def recv_msg(server:socket.socket,n:int) -> int:
             received += 1
         except:
             if UDP_IP_OTHER != '':
-                RTT *= 1.001
+                RTT *= 1.005
     return received
 
 # Requesting messages
@@ -176,7 +176,7 @@ def req_msg(server:socket.socket) -> None:
             send_time[offset] = time.time()
             server.sendto(msg_to_bytes(offset,size),(UDP_IP_OTHER, UDP_PORT_OTHER))
             i += 1
-        received =recv_msg(server,n+2)
+        received =recv_msg(server,n+3)
         if received < n:
             N = (N+1)//2
         else:
