@@ -1,7 +1,7 @@
 import socket,hashlib,time
 
 # Server
-UDP_IP_OTHER = '10.17.7.134'
+UDP_IP_OTHER = '10.17.7.218'
 UDP_PORT_OTHER = 9802
 UDP_IP_SELF = ''
 UDP_PORT_SELF = 9810
@@ -149,13 +149,12 @@ def recv_msg(server:socket.socket,n:int) -> int:
                 file_lines[int(offset_)] = byte_to_string_stream[1:]
             else:
                 file_lines[int(offset_)] = byte_to_string_stream
-                if int(offset_) in ack_queue:
-                    ack_queue.pop(int(offset_))
-                    if UDP_IP_OTHER != '':
-                        RTT = 0.8*RTT + 0.2*(time.time()-send_time[int(offset_)])
-                        server.settimeout(RTT)
-            # Deletion from the place we are requesting the offset
-            received += 1
+                if UDP_IP_OTHER != '':
+                    RTT = 0.8*RTT + 0.2*(time.time()-send_time[int(offset_)])
+                    server.settimeout(RTT)
+            if int(offset_) in ack_queue:
+                ack_queue.pop(int(offset_))
+                received += 1
         except:
             if UDP_IP_OTHER != '':
                 RTT *= 1.005
