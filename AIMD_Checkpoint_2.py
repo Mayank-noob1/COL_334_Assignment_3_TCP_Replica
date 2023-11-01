@@ -2,7 +2,7 @@ import socket,hashlib,time
 
 # Server
 UDP_IP_OTHER = '10.17.7.134'
-UDP_PORT_OTHER = 9801
+UDP_PORT_OTHER = 9802
 UDP_IP_SELF = ''
 UDP_PORT_SELF = 9810
 
@@ -13,7 +13,8 @@ REQ_SIZE = 1448
 SIZE = 0
 LINES = 0
 WAIT_TIME = 0.1
-RTT = 0.005
+RTT = 0.007
+
 RTT_array = []
 N = 5
 squished = 0
@@ -21,6 +22,7 @@ squished = 0
 ack_queue = dict[int,int]()
 # File
 file_lines = dict[int,str]()
+send_time = dict()
 
 # Message to bytes
 def msg_to_bytes(offset: int,byte: int) -> bytes:
@@ -92,7 +94,7 @@ def submit(server:socket.socket) -> None:
     while True:
         try:
             server.sendto(msg.encode(),(UDP_IP_OTHER, UDP_PORT_OTHER))
-            time.sleep(3*RTT)
+            time.sleep(2*RTT)
             data,_=server.recvfrom(10000)
             datas = data.decode().split('\n')
             for line in datas:
@@ -126,7 +128,7 @@ def flush(server:socket.socket) -> None:
 
 # Receiving messages
 def recv_msg(server:socket.socket,n:int) -> int:
-    global N,LINES,PACKETS,file_lines,RTT, squished
+    global N,LINES,PACKETS,file_lines,RTT, squished,send_time
     i = 0
     received = 0
     while i <= n:
@@ -147,31 +149,35 @@ def recv_msg(server:socket.socket,n:int) -> int:
                 file_lines[int(offset_)] = byte_to_string_stream[1:]
             else:
                 file_lines[int(offset_)] = byte_to_string_stream
-
+                if int(offset_) in ack_queue:
+                    ack_queue.pop(int(offset_))
+                    if UDP_IP_OTHER != '':
+                        RTT = 0.8*RTT + 0.2*(time.time()-send_time[int(offset_)])
+                        server.settimeout(RTT)
             # Deletion from the place we are requesting the offset
-            if int(offset_) in ack_queue:
-                ack_queue.pop(int(offset_))
             received += 1
         except:
-            pass
+            if UDP_IP_OTHER != '':
+                RTT *= 1.001
     return received
 
 # Requesting messages
 def req_msg(server:socket.socket) -> None:
     print("Requesting messages...")
-    global N
+    global N,RTT
     while True:
+        print(len(ack_queue),RTT)
         if len(ack_queue) == 0:
             break
         n = min(N,len(ack_queue))
         i = 0
         for offset,size in ack_queue.items():
             if (i == n): break
+            send_time[offset] = time.time()
             server.sendto(msg_to_bytes(offset,size),(UDP_IP_OTHER, UDP_PORT_OTHER))
             i += 1
-        time.sleep(RTT*(3))
-        received =recv_msg(server,n)
-        if 10*received < n*9:
+        received =recv_msg(server,n+2)
+        if received < n:
             N = (N+1)//2
         else:
             N += 1
