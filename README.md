@@ -9,7 +9,7 @@ A UDP server is hosted by course coordinator on vayu.iitd.ac.in. Server might dr
 
 ### Files: 
   - Checkpoint<check=num>.py holds our solution for the checkpoints with reports .pdf files.
-  TCP.py contains both AIMD and AIAD implementation where mode = 0 for AIAD and mode = 1 for AIMD.
+  - TCP.py contains both AIMD and AIAD implementation where mode = 0 for AIAD and mode = 1 for AIMD.
 
 ### Improvements:
   - Parallel execution in real scenario and better RTT evaluation methods and predicting model for wait time and window size.
